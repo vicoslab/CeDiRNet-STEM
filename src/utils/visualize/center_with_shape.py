@@ -14,12 +14,14 @@ class CentersShapeVisualizeTest(Visualizer):
     # default keys for visualization windows
     KEYS = ['image', 'centers', 'centers-est', 'pred',  'class', 'gt-diff', 'label']
 
-    def __init__(self, keys=(), plot_only=None, shape_type=ShapeType.CIRCLE, polygon=False, image_channels=None, image_grayscale=None, **kwargs):
+    def __init__(self, keys=(), plot_only=None, shape_type=ShapeType.CIRCLE, polygon=False, image_channels=None, image_grayscale=None, plot_radius_args=dict(), **kwargs):
         super(CentersShapeVisualizeTest, self).__init__(keys=self.KEYS + list(keys), **kwargs)
 
         self.image_channels = image_channels
         self.image_grayscale = image_grayscale
         self.shape_type = ShapeType[shape_type.upper()] if type(shape_type) is str else shape_type
+
+        self.plot_radius_args = plot_radius_args
 
         self.plot_only = plot_only if plot_only is not None else self.KEYS + list(keys)
         self.polygon = polygon
@@ -141,8 +143,15 @@ class CentersShapeVisualizeTest(Visualizer):
 
         radius_args_ = dict(thickness=2)
         radius_args_.update(radius_args)
-        radius_gt_args_ = dict(thickness=1)
+        radius_gt_args_ = dict(thickness=1, color=(255, 0, 0), )
         radius_gt_args_.update(radius_gt_args)
+
+        if gt:
+            for i, p in enumerate(gt_list):
+                radius = gt_radius_map[(int(p[0]), int(p[1]))]
+
+                cv2.circle(img, (int(p[1]), int(p[0])), int(radius), **radius_gt_args_)
+
         if len(pred_list) > 0:
             pred_list_true = pred_list[pred_match[:, 0] > 0, :]
             pred_list_false = pred_list[pred_match[:, 0] <= 0, :]
@@ -169,11 +178,6 @@ class CentersShapeVisualizeTest(Visualizer):
                            color=(255, 255, 0) if is_difficult_gt[i] == 0 else (0, 255, 255), thickness=-1)
                 cv2.circle(img, (int(p[1]), int(p[0])), radius=4, color=(0, 0, 0), thickness=1)
 
-                radius = gt_radius_map[(int(p[0]), int(p[1]))]
-
-                cv2.circle(img, (int(p[1]), int(p[0])), int(radius), color=(255, 0, 0), **radius_gt_args_)
-
-
         return img
 
 
@@ -198,7 +202,8 @@ class CentersShapeVisualizeTest(Visualizer):
         if self.shape_type in [ShapeType.CIRCLE, ShapeType.CIRCLE_WITH_CIRCULARITY]:
             plot_predictions_with_radius = partial(self.plot_radius_predictions_cv,
                                                     pred_list=pred_list, pred_match=pred_gt_match, radius_prediction_map=output[0, 3],
-                                                    gt_list=gt_list, gt_radius_map=gt_shape_coef[0], is_difficult_gt=is_difficult_gt)
+                                                    gt_list=gt_list, gt_radius_map=gt_shape_coef[0], is_difficult_gt=is_difficult_gt, 
+                                                    **self.plot_radius_args)
         else:
             plot_predictions_with_radius = plot_predictions
 
