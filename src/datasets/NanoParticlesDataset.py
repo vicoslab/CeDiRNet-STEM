@@ -24,7 +24,7 @@ class NanoParticlesDataset(Dataset):
 	IGNORE_OVERLAP_BORDER_FLAG = 4
 	IGNORE_DIFFICULT_FLAG = 8
 	
-	def __init__(self, name_pattern, gt_name_replace_args, root_dir='./', subfolders=None, 
+	def __init__(self, name_pattern, gt_name_replace_args, root_dir='./', subfolders=None, gt_optional=False,
 			   gt_from_circles_fitting=True, gt_from_elipse_fitting=False, gt_from_polygons=False,
 			   gt_from_circularity=False, gt_circularity_inverse=False, mapping_to_nm=None, 
 			   gt_border_centers_and_label_fix=False,
@@ -36,6 +36,8 @@ class NanoParticlesDataset(Dataset):
 
 		if num_cpu_threads:
 			torch.set_num_threads(num_cpu_threads)
+
+		self.gt_optional = gt_optional
 
 		self.gt_from_circles_fitting = gt_from_circles_fitting
 		self.gt_from_elipse_fitting = gt_from_elipse_fitting
@@ -166,13 +168,16 @@ class NanoParticlesDataset(Dataset):
 		for args in self.gt_name_replace_args:
 			gt_fn = gt_fn.replace(*args)
 
-		masks = np.load(gt_fn)
-		if gt_fn.endswith(".npy"):
-			masks = np.load(gt_fn)
-		elif gt_fn.endswith(".npz"):
-			masks = np.load(gt_fn)['arr_0']
+		if os.path.exists(gt_fn) or self.gt_optional == False:
+			if gt_fn.endswith(".npy"):
+				masks = np.load(gt_fn)
+			elif gt_fn.endswith(".npz"):
+				masks = np.load(gt_fn)['arr_0']
+			else:
+				raise Exception("Unsupported input data, expected .npy or .npz files")
 		else:
-			raise Exception("Unsupported input data, expected .npy or .npz files")
+			masks =  torch.zeros((im_size[1], im_size[0],0), dtype=torch.uint8)
+		
 
 		if "_masks." in gt_fn:
 			padding_fn = gt_fn.replace("_masks.","_padding.")
