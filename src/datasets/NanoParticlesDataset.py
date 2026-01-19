@@ -28,7 +28,7 @@ class NanoParticlesDataset(Dataset):
 			   gt_from_circles_fitting=True, gt_from_elipse_fitting=False, gt_from_polygons=False,
 			   gt_from_circularity=False, gt_circularity_inverse=False, mapping_to_nm=None, 
 			   gt_border_centers_and_label_fix=False,
-			   BORDER_MARGIN_FOR_MASK=0, keep_centers_at_border_margin=False, mark_truncated_center_box_for_border_margin=False,
+			   BORDER_MARGIN_FOR_MASK=0, keep_centers_at_border_margin=False, mark_truncated_center_box_for_border_margin=False, mark_truncated_mask_for_border_margin=True,
 			   fixed_bbox_size=15, resize_factor=None, MAX_NUM_CENTERS=1024, transform=None, valid_sample_names=None, 
 			   num_cpu_threads=1, check_consistency=True, name_pattern_for_channels=None,
 				transform_only_valid_centers=False, transform_per_sample_rng=False, **kwargs):
@@ -96,6 +96,7 @@ class NanoParticlesDataset(Dataset):
 		self.BORDER_MARGIN_FOR_MASK = BORDER_MARGIN_FOR_MASK
 		self.keep_centers_at_border_margin = keep_centers_at_border_margin
 		self.mark_truncated_center_box_for_border_margin = mark_truncated_center_box_for_border_margin
+		self.mark_truncated_mask_for_border_margin = mark_truncated_mask_for_border_margin
 
 	def __len__(self):
 		return self.size
@@ -324,9 +325,10 @@ class NanoParticlesDataset(Dataset):
 					mask_ids = np.where(masks[:,:,i].flatten()!=0)[0]
 					iou = overlap_pixels_ids(mask_ids,ignore_ids)
 
-					if iou > 0:
-						# mark as truncated
-						ignore[0][masks[:,:,i]!=0] = self.IGNORE_TRUNCATED_FLAG
+					if iou > 0:						
+						if self.mark_truncated_mask_for_border_margin:
+							# mark whole mask as truncated
+							ignore[0][masks[:,:,i]!=0] = self.IGNORE_TRUNCATED_FLAG
 						if self.mark_truncated_center_box_for_border_margin:
 							# also mark around center to ignore
 							ignore[0][mask_pt[0][0]:mask_pt[0][1], mask_pt[1][0]:mask_pt[1][1]] = self.IGNORE_TRUNCATED_FLAG
