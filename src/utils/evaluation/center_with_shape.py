@@ -14,17 +14,44 @@ from utils.utils import ShapeType
 
 class CenterShapeEval(CenterGlobalMinimizationEval):
 
-    def __init__(self, *args, use_gt_centers=False, append_error_to_display_name=True, shape_type=ShapeType.CIRCLE, **kwargs):
+    def __init__(
+        self,
+        *args,
+        use_gt_centers=False,
+        append_error_to_display_name=True,
+        shape_type=ShapeType.CIRCLE,
+       
+        radius_error_bins=None,
+        **kwargs,
+    ):
         super(CenterShapeEval, self).__init__(*args, **kwargs)
 
         self.use_gt_centers = use_gt_centers
         self.metrics.update(dict(size=[],size_per_img=[],iou=[],iou_per_img=[],translation=[],
                                  circularity=[],circularity_rel=[],
-                                 diameter=[],diameter_rel=[],diameter_nm=[]))
+                                 diameter=[],diameter_rel=[],diameter_nm=[],
+                                 radius_rel=[],
+                                 radius_rel_binned=[],
+                                 radius_rel_pairs=[]))
         self.append_error_to_display_name = append_error_to_display_name
 
         self.shape_type = ShapeType[shape_type.upper()] if type(shape_type) is str else shape_type
-        
+
+        # Bin edges for reporting radius relative error by radius.
+        # Expected format: list of bin edges in pixels, e.g. [8.79, 11.05, ..., 54.02]
+        if radius_error_bins is not None:
+            # `combitorial_args_fn` may expand list values and accidentally pass a scalar.
+            # Accept list/tuple/np.ndarray; ignore scalars.
+            if isinstance(radius_error_bins, (int, float, np.floating, np.integer)):
+                self.radius_error_bins = None
+            else:
+                bins = [float(b) for b in radius_error_bins]
+                if len(bins) < 2:
+                    raise ValueError('radius_error_bins must have at least 2 edges')
+                self.radius_error_bins = sorted(bins)
+        else:
+            self.radius_error_bins = None
+                
 
     def save_str(self):
         return "tau=%.1f-score_thr=%.1f" % (self.tau_thr, self.score_thr)
@@ -75,6 +102,7 @@ class CenterShapeEval(CenterGlobalMinimizationEval):
                 diameter_err = []
                 diameter_nm_err = []
                 diameter_rel_err = []
+                radius_rel_err = []
                 iou_err = []
                 circularity_err = []
                 circularity_rel_err = []
@@ -85,8 +113,15 @@ class CenterShapeEval(CenterGlobalMinimizationEval):
 
                 pred_matched_idx = np.where(pred_gt_match_by_center[:,0] != 0)[0]
 
+                matched_ids = []
+
                 for i, (gt_idx, p_idx) in enumerate(zip(gt_selected_ids,pred_matched_idx)):
-                    if pred_gt_match_by_center[i] == 0:
+
+                    c_gt = gt_centers_dict[gt_idx][::-1]
+                    is_difficut = gt_difficult[int(c_gt[1]),int(c_gt[0])]
+                    
+                    # do not count difficult examples
+                    if is_difficut:
                         continue
                     
                     c_gt = gt_centers_dict[gt_idx][::-1]
@@ -101,6 +136,7 @@ class CenterShapeEval(CenterGlobalMinimizationEval):
                         size_err.append(e) # this is radius error 
                         diameter_err.append(2*e) # this is diameter error
                         diameter_rel_err.append(rel_e)
+                        radius_rel_err.append(rel_e)
 
                         if px_in_nm is not None:
                             diameter_nm_err.append(2*e * px_in_nm.item()) # this is diameter error in nanometers
@@ -147,6 +183,58 @@ class CenterShapeEval(CenterGlobalMinimizationEval):
 
                     if self.append_error_to_display_name:
                         filename_suffix = f'size_{np.mean(size_per_img):05.2f}_{filename_suffix}'
+
+                if len(radius_rel_err) > 0:
+                    radius_rel_err = np.asarray(radius_rel_err, dtype=np.float32)
+                    self.metrics['radius_rel'].extend(radius_rel_err)
+
+                    # Append a compact per-image radius rel err summary
+                    if self.append_error_to_display_name:
+                        filename_suffix = f'rrel_{float(np.mean(radius_rel_err)):05.2f}%_{filename_suffix}'
+
+                    # Bin by ground-truth radius (in px)
+                    if self.radius_error_bins is not None:
+                        # Vectorized GT radius lookup at GT center locations
+                        # gt_selected stores (x,y) in pixel coords; convert to integer indices
+                        gt_xy = np.asarray(gt_selected, dtype=np.float32)
+                        gt_x = np.clip(gt_xy[matched_ids, 0].astype(np.int32), 0, gt_shape_coef.shape[-1] - 1)
+                        gt_y = np.clip(gt_xy[matched_ids, 1].astype(np.int32), 0, gt_shape_coef.shape[-2] - 1)
+
+                        # Avoid per-item torch->numpy conversions: bring the whole map once
+                        # Note: gt_shape_coef is (C,1,H,W)
+                        gt_shape_np = gt_shape_coef[:, 0].detach().cpu().numpy()
+                        gt_radii = gt_shape_np[0, gt_y, gt_x].astype(np.float32)
+
+                        # store per-instance pairs for unbiased global bin aggregation
+                        # (use tuples to stay JSON-serializable via NumpyEncoder)
+                        self.metrics['radius_rel_pairs'].extend(
+                            list(zip(gt_radii.tolist(), radius_rel_err.tolist()))
+                        )
+
+                        # Fast per-image bin stats
+                        edges = np.asarray(self.radius_error_bins, dtype=np.float32)
+                        # np.digitize returns 1..len(edges)-1; we want 0..n_bins-1
+                        bin_idx = np.digitize(gt_radii, edges, right=False) - 1
+                        n_bins = len(edges) - 1
+                        binned = []
+                        for bi in range(n_bins):
+                            lo, hi = float(edges[bi]), float(edges[bi + 1])
+                            # last bin should include right edge
+                            if bi == n_bins - 1:
+                                sel = (gt_radii >= lo) & (gt_radii <= hi)
+                            else:
+                                sel = bin_idx == bi
+                            vals = radius_rel_err[sel]
+                            binned.append(
+                                dict(
+                                    bin=[lo, hi],
+                                    n=int(vals.size),
+                                    mean=float(np.mean(vals)) if vals.size else None,
+                                    median=float(np.median(vals)) if vals.size else None,
+                                )
+                            )
+
+                        self.metrics['radius_rel_binned'].append(dict(image=im_name, bins=binned))
 
                 if len(diameter_err) > 0:
                     diameter_err = np.array(diameter_err)
@@ -209,10 +297,13 @@ class CenterShapeEval(CenterGlobalMinimizationEval):
         DIAM = np.array(self.metrics['diameter']).mean()
         DIAM_REL = np.array(self.metrics['diameter_rel']).mean()
         DIAM_nm = np.array(self.metrics['diameter_nm']).mean()
+        RREL = np.array(self.metrics['radius_rel']).mean() if len(self.metrics.get('radius_rel', [])) > 0 else np.nan
 
         if print_result:
             RES = 'Re=%.4f, mae=%.4f, rmse=%.4f, ratio=%.4f, AP=%.4f, AR=%.4f, F1=%.4f, translation=%.4f, '% (Re, mae, rmse, ratio, AP, AR, F1, TE)
             RES += 'size=%.4f, size_per_img=%.4f, iou=%.4f, iou_per_img=%.4f, circularity=%.4f, circularity_rel=%.4f, diameter=%.4f, diameter_rel=%.4f, diameter_nm=%.4f, ' % (SE, SE_PER_IMG, IoU, IoU_PER_IMG, CIRC, CIRC_REL, DIAM, DIAM_REL, DIAM_nm)
+            if not np.isnan(RREL):
+                RES += 'radius_rel=%.4f, ' % (RREL)
             print(RES)
 
         if len(self.all_detections) > 0:
@@ -223,9 +314,56 @@ class CenterShapeEval(CenterGlobalMinimizationEval):
         else:
             metrics_mAP = None, None
 
-        metrics = dict(AP=AP, AR=AR, F1=F1, ratio=ratio, Re=Re, mae=mae, rmse=rmse, all_images=self.metrics,
-                       metrics_mAP=metrics_mAP, translation=TE, size=SE, size_per_img=SE_PER_IMG, iou=IoU, iou_per_img=IoU_PER_IMG, 
-                       circularity=CIRC, circularity_rel=CIRC_REL, diameter=DIAM, diameter_rel=DIAM_REL, diameter_nm=DIAM_nm)
+        # Aggregate binned radius relative error (global)
+        radius_rel_binned_summary = None
+        if self.radius_error_bins is not None and len(self.metrics.get('radius_rel_pairs', [])) > 0:
+            edges = np.array(self.radius_error_bins, dtype=np.float32)
+            pairs = np.array(self.metrics['radius_rel_pairs'], dtype=np.float32)
+            gt_r = pairs[:, 0]
+            rel_e = pairs[:, 1]
+
+            binned = []
+            for bi in range(len(edges) - 1):
+                lo, hi = float(edges[bi]), float(edges[bi + 1])
+                if bi == len(edges) - 2:
+                    sel = (gt_r >= lo) & (gt_r <= hi)
+                else:
+                    sel = (gt_r >= lo) & (gt_r < hi)
+                vals = rel_e[sel]
+                binned.append(
+                    dict(
+                        bin=[lo, hi],
+                        n=int(vals.size),
+                        mean=float(np.mean(vals)) if vals.size else None,
+                        median=float(np.median(vals)) if vals.size else None,
+                    )
+                )
+
+            radius_rel_binned_summary = dict(bin_edges=[float(e) for e in edges], bins=binned)
+
+        metrics = dict(
+            AP=AP,
+            AR=AR,
+            F1=F1,
+            ratio=ratio,
+            Re=Re,
+            mae=mae,
+            rmse=rmse,
+            all_images={k:v for k,v in self.metrics.items() if k not in ['radius_rel_pairs', 'radius_rel_binned']},
+            metrics_mAP=metrics_mAP,
+            translation=TE,
+            size=SE,
+            size_per_img=SE_PER_IMG,
+            iou=IoU,
+            iou_per_img=IoU_PER_IMG,
+            circularity=CIRC,
+            circularity_rel=CIRC_REL,
+            diameter=DIAM,
+            diameter_rel=DIAM_REL,
+            diameter_nm=DIAM_nm,
+            radius_rel=RREL,
+            radius_rel_binned=radius_rel_binned_summary,
+        )
 
         ########################################################################################################
         # SAVE EVAL RESULTS TO JSON FILE
