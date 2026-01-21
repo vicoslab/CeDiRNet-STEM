@@ -126,7 +126,7 @@ class CenterShapeEval(CenterGlobalMinimizationEval):
                     
                     c_gt = gt_centers_dict[gt_idx][::-1]
 
-                    if self.shape_type in [ShapeType.CIRCLE,ShapeType.CIRCLE_WITH_CIRCULARITY]:
+                    if self.shape_type in [ShapeType.CIRCLE,ShapeType.CIRCLE_WITH_CIRCULARITY, ShapeType.CIRCLE_WITH_CIRCULARITY_NON_INVERSE]:
                         gt_radius_i = gt_shape_coef[0,0,int(c_gt[1]), int(c_gt[0])].cpu().numpy()
                         predictions_radius_i = predictions_coef[i][0]
 
@@ -141,18 +141,21 @@ class CenterShapeEval(CenterGlobalMinimizationEval):
                         if px_in_nm is not None:
                             diameter_nm_err.append(2*e * px_in_nm.item()) # this is diameter error in nanometers
                     
-                    if self.shape_type in [ShapeType.CIRCLE_WITH_CIRCULARITY]:
+                    if self.shape_type in [ShapeType.CIRCLE_WITH_CIRCULARITY, ShapeType.CIRCLE_WITH_CIRCULARITY_NON_INVERSE]:
                         gt_circularity_i = gt_shape_coef[1,0,int(c_gt[1]), int(c_gt[0])].cpu().numpy()
                         predictions_circularity_i = predictions_coef[i][1]
                         #print("gt_circularity_i(inverse),predictions_circularity_i(inverse):", gt_circularity_i, predictions_circularity_i)
 
-                        # convert to [0-1] range and get error there
-                        gt_circularity_i = 1-1/gt_circularity_i
-                        predictions_circularity_i = 1-1/predictions_circularity_i
-                        #print("gt_circularity_i,predictions_circularity_i:", gt_circularity_i, predictions_circularity_i)
+                        if self.shape_type in [ShapeType.CIRCLE_WITH_CIRCULARITY]: # by default we have it as inverse (due to historical reasons)
+                            # convert to [0-1] range and get error there
+                            gt_circularity_i = 1-1/gt_circularity_i
+                            predictions_circularity_i = 1-1/predictions_circularity_i
+
+                        
                         e = np.abs(predictions_circularity_i - gt_circularity_i)
                         rel_e = e/gt_circularity_i *100
-
+                        
+                        #print("gt_circularity_i,predictions_circularity_i:", gt_circularity_i, predictions_circularity_i, "error abs, rel:", e, rel_e)
                         circularity_err.append(e)                        
                         circularity_rel_err.append(rel_e)
 
