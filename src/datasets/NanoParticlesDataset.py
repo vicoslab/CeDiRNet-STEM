@@ -26,7 +26,7 @@ class NanoParticlesDataset(Dataset):
 	
 	def __init__(self, name_pattern, gt_name_replace_args, root_dir='./', subfolders=None, gt_optional=False,
 			   gt_from_circles_fitting=True, gt_from_elipse_fitting=False, gt_from_polygons=False,
-			   gt_from_circularity=False, gt_circularity_inverse=False, mapping_to_nm=None, 
+			   gt_from_circularity=False, gt_from_circularity_fixed=False, gt_circularity_inverse=False, mapping_to_nm=None, 
 			   gt_border_centers_and_label_fix=False,
 			   BORDER_MARGIN_FOR_MASK=0, keep_centers_at_border_margin=False, mark_truncated_center_box_for_border_margin=False, mark_truncated_mask_for_border_margin=True,
 			   fixed_bbox_size=15, resize_factor=None, MAX_NUM_CENTERS=1024, transform=None, valid_sample_names=None, 
@@ -42,6 +42,7 @@ class NanoParticlesDataset(Dataset):
 		self.gt_from_circles_fitting = gt_from_circles_fitting
 		self.gt_from_elipse_fitting = gt_from_elipse_fitting
 		self.gt_from_circularity = gt_from_circularity
+		self.gt_from_circularity_fixed = gt_from_circularity_fixed
 		self.gt_from_polygons = gt_from_polygons
 
 		self.gt_circularity_inverse = gt_circularity_inverse
@@ -155,7 +156,7 @@ class NanoParticlesDataset(Dataset):
 			num_shape_coef = 3
 		if self.gt_from_circles_fitting:
 			num_shape_coef = 1
-		if self.gt_from_circularity:
+		if self.gt_from_circularity or self.gt_from_circularity_fixed:
 			num_shape_coef = 2
 
 		label = torch.zeros((im_size[1], im_size[0]), dtype=torch.uint8)
@@ -232,7 +233,7 @@ class NanoParticlesDataset(Dataset):
 						# do not add it to final list of centerss
 						continue
 			
-			if self.gt_from_circularity or self.gt_from_polygons:
+			if self.gt_from_circularity or self.gt_from_circularity_fixed or self.gt_from_polygons:
 				contours, _ = cv2.findContours((masks[:,:,i]!=0).astype(np.uint8), 
 											cv2.RETR_EXTERNAL,  # Only external contours
 											cv2.CHAIN_APPROX_SIMPLE)
@@ -293,13 +294,20 @@ class NanoParticlesDataset(Dataset):
 				#pt[0] = np.clip(pt[0], 0, masks.shape[-2]-1)
 				#pt[1] = np.clip(pt[1], 0, masks.shape[-3]-1)
 
-			if self.gt_from_circularity:
-				perimiter = sum([len(c) for c in contours if len(c) > 4])				
+			if self.gt_from_circularity or self.gt_from_circularity_fixed:
+
+				assert not (self.gt_from_circularity and self.gt_from_circularity_fixed), "Error in NanoParticlesDataset: Cannot use gt_from_circularity and gt_from_circularity_fixed at the same time"
+
+				if self.gt_from_circularity:
+					perimiter = sum([len(c) for c in contours if len(c) > 4])
+				elif self.gt_from_circularity_fixed:
+					perimiter = sum([cv2.arcLength(c,True) for c in contours if len(c) > 4])
+
 				area = masks[:,:,i].sum()
 
 				circularity = 4*np.pi* (area/perimiter**2)
 				if self.gt_circularity_inverse:
-					circularity = 1-1/circularity
+					circularity = 1/(1-circularity)
 				
 				
 				# set radii from the size of mask with the assumption of having a circle
