@@ -38,8 +38,8 @@ conda env create -f environment.yaml
 
 ## Models
 
- * [MODEL](https://box.vicos.si/skokec/STEM/checkpoint.pth) trained with ConvNexT-base on 512x512 STEM images
- * pre-trained [LOCALIZATION](https://box.vicos.si/skokec/rtfm/CeDiRNet-3DoF/localization_checkpoint.pth) model for the second stage network trained on syntetic data only
+ * [MODEL](https://data.vicos.si/skokec/STEM/checkpoint.pth) trained with ConvNexT-base on 512x512 STEM images
+ * pre-trained [LOCALIZATION](https://data.vicos.si/skokec/rtfm/CeDiRNet-3DoF/localization_checkpoint.pth) model for the second stage network trained on synthetic data only
 
 ## Usage
 

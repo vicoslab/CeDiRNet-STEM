@@ -11,7 +11,7 @@ export PYTHONPATH=$PYTHONPATH:$(dirname $BASH_SOURCE)/src
 # GET LOCALIZATION NETWORK
 
 centernet_filename="$OUTPUT_DIR/localization_checkpoint.pth"
-wget -O $centernet_filename https://box.vicos.si/skokec/rtfm/CeDiRNet-3DoF/localization_checkpoint.pth
+wget -O $centernet_filename https://data.vicos.si/skokec/rtfm/CeDiRNet-3DoF/localization_checkpoint.pth
 
 ########################################
 # TRAINING
