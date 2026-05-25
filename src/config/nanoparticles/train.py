@@ -32,10 +32,10 @@ args = dict(
 				 	opts=dict(shape_type='circle_with_circularity')),
 
 	save=True,
-	save_interval=10,
+	save_interval=100,
 
 	# --------
-	n_epochs=100,
+	n_epochs=1000,
 	
 	save_dir=os.path.join(OUTPUT_DIR),
 
@@ -61,10 +61,16 @@ args = dict(
 				# a subset from PtCo-deg with different aglomerations
 				'FCS-1-0053','FCS-1-0139','FCS-1-0161','FCS-1-0261','FCS-1-0279',
 			],
-			'BORDER_MARGIN_FOR_MASK': 0,
+			'BORDER_MARGIN_FOR_MASK': 1,
+			'keep_centers_at_border_margin': True, 
+			'mark_truncated_center_box_for_border_margin': True, 
+			'mark_truncated_mask_for_border_margin': False,
+			'gt_border_centers_and_label_fix': True,
 			'fixed_bbox_size': 15,
 			'gt_from_circles_fitting': False, # MUST BE SET to False for circularity
-			'gt_from_circularity': True,
+			'gt_from_circularity': False,
+			'gt_from_circularity_fixed': True,
+			'gt_circularity_inverse': False,
 			'resize_factor': 1,
 			
 			'transform_per_sample_rng': False,
@@ -152,7 +158,7 @@ args = dict(
 		optimizer='Adam',
 		lr=1e-4,
 		weight_decay=0,
-
+		lr_decay_exp=2,
 	),
 	center_model=dict(
 		name='CenterAttributeEstimator',
@@ -186,6 +192,7 @@ args = dict(
 		optimizer='Adam',
 		lr=0,
 		weight_decay=0,
+		lr_decay_exp=0.9
 	),	
 
 	# loss options
@@ -230,18 +237,18 @@ args = dict(
 	loss_w={
 		'w_cent': 0.1,
 		'w_shape': 0.5,
-		'w_radius': 1,
+		'w_radius': 0.5,
 		'w_circularity': 1,
 	},
 
 )
 
 # Original scheduler used by SpatialEmbedding method
-args['lambda_scheduler_fn']=lambda _args: (lambda epoch: pow((1-((epoch)/_args['n_epochs'])), 0.9))
+args['lambda_scheduler_fn']=lambda _args: (lambda epoch: pow((1-((epoch)/_args['n_epochs'])), _args['model']['lr_decay_exp']))
 #args['lambda_scheduler_fn']=lambda _args: (lambda epoch: 1.0) # disabled
 
 args['model']['lambda_scheduler_fn'] = args['lambda_scheduler_fn']
-args['center_model']['lambda_scheduler_fn'] = lambda _args: (lambda epoch: pow((1-((epoch)/_args['n_epochs'])), 0.9) if epoch > 1 else 0)
+args['center_model']['lambda_scheduler_fn'] = lambda _args: (lambda epoch: pow((1-((epoch)/_args['n_epochs'])), _args['center_model']['lr_decay_exp']) if epoch > 1 else 0)
 
 
 def get_args():

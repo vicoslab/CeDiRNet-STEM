@@ -21,7 +21,7 @@ DATASET="nanoparticles" python -m train --config "pretrained_center_model_path=$
 ########################################
 # EVALUATING
 
-EVAL_EPOCHS=("") # ("" _010 _020 _030 _040 _050 _060 _070 _080 _090)
+EVAL_EPOCHS=("" _100 _200 _300 _400 _500 _600 _700 _800 _900) # "" == last
 
 # FOR DISPLAY
 #DISPLAY_ARGS="display=True eval.score_combination_and_thr.0.center=[0.40] visualizer.opts.plot_only=[image]"

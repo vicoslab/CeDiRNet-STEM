@@ -92,7 +92,7 @@ args = dict(
 		score_thr_final=[0.01],
 		skip_center_eval=True,
 		center_with_shape=dict(
-			shape_type='circle_with_circularity',
+			shape_type='circle_with_circularity_non_inverse',
 			display_best_threshold=False,
 			tau_thr=[20],
 		),
@@ -131,9 +131,15 @@ args = dict(
 			#'type': 'train',
 			#'valid_sample_names': [ 'exsitu_PtNi_-0021','exsitu_PtNi_-0031','exsitu_PtNi_-0035','exsitu_PtNi_-0039','exsitu_PtNi_-0043','exsitu_PtNi_-0045','exsitu_PtNi_-0075','exsitu_PtNi_-0077','exsitu_PtNi_-0089','exsitu_PtNi_-0091',  'PtCo_IL_a-0016','PtCo_IL_a-0090','PtCo_IL_a-0118','PtCo_IL_a-0152','PtCo_IL_b-0014','PtCo_IL_b-0093','PtCo_IL_b-0119','PtCo_IL_b-0151',  'FCS-1-0054','FCS-1-0140','FCS-1-0162','FCS-1-0262','FCS-1-0280', ],
 			'gt_from_circles_fitting': False, # MUST BE SET to False for circularity
-			'gt_from_circularity': True,
+			'gt_from_circularity': False,
+			'gt_from_circularity_fixed': True,
+			'gt_circularity_inverse': False,
 			'mapping_to_nm': to_nanometer_fn,
-			'BORDER_MARGIN_FOR_MASK': 0,
+			'BORDER_MARGIN_FOR_MASK': 1,
+			'keep_centers_at_border_margin': True,
+			'mark_truncated_center_box_for_border_margin': True,
+			'mark_truncated_mask_for_border_margin': False,
+			'gt_border_centers_and_label_fix': True,
 			'fixed_bbox_size': 5,
 			'resize_factor': 1,
 			'transform': [
