@@ -31,14 +31,14 @@ pip install torch==1.9.1+cu111 torchvision==0.10.1+cu111 torchaudio==0.9.1 -f ht
 pip install -r requirements.txt
 ```
 
-or directly from the `environment.yaml` file:
+or directly from the `environment.yml` file:
 ```bash
-conda env create -f environment.yaml
+conda env create -f environment.yml
 ```
 
 ## Models
 
- * [MODEL](https://data.vicos.si/skokec/STEM/checkpoint.pth) trained with ConvNexT-base on 512x512 STEM images
+ * [MODEL](https://data.vicos.si/skokec/STEM/checkpoint.pth) trained for 1000 epochs with ConvNeXt-base on 512x512 STEM images using `src/config/nanoparticles/train.py` (SHA-256: `b77a30d6346309aeb64a7646d851db74d974758bf7d8e5f2cfcfd9f081637980`)
  * pre-trained [LOCALIZATION](https://data.vicos.si/skokec/rtfm/CeDiRNet-3DoF/localization_checkpoint.pth) model for the second stage network trained on synthetic data only
 
 ## Usage
@@ -55,7 +55,7 @@ dataset/download_dataset.sh
 
 Script will print and display training progress (losses) as well as final results for all evaluated thresholds for the last epoch. Raw results for last epoch will be stored in JSON file in `./results/test_results` under folders for the corespoding thresholds.
 
-Training for 100 epochs on 23 images of 512x512 pixels will take between 15-30 minutes on a single NVIDIA A100 40GB, requiring less than 20GB of GPU memory. Inference time should be less then a few seconds per image on the same GPU.
+The default configuration trains for 1000 epochs on 23 images of 512x512 pixels and evaluates checkpoints saved every 100 epochs. It requires less than 20GB of GPU memory on an NVIDIA A100 40GB. Inference time should be less than a few seconds per image on the same GPU.
 
 Inference of images from any folder:
 ```bash
