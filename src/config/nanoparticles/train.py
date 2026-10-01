@@ -36,6 +36,8 @@ args = dict(
 
 	# --------
 	n_epochs=1000,
+	# Whole-detector dropout: 0.25/0.25 keeps pairs 50% of the time; off by default.
+	modality_dropout=dict(bf_drop_probability=0.0, haadf_drop_probability=0.0),
 	
 	save_dir=os.path.join(OUTPUT_DIR),
 

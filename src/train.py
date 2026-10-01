@@ -23,6 +23,8 @@ from utils import transforms as my_transforms
 from utils.distributed_sampler import DistributedBatchSampler, DistributedRandomSampler, distributed_sync_dict
 from utils.utils import Logger, variable_len_collate
 from utils.visualize import get_visualizer
+from stem_modality import (apply_modality_dropout, create_modality_dropout_generator,
+                           modality_dropout_metadata, validate_probabilities)
 
 from models.multitask_model import MultiTaskModel
 from criterions.loss_weighting.weight_methods import get_weight_method
@@ -31,6 +33,7 @@ from criterions.loss_weighting.weight_methods import get_weight_method
 class Trainer:
     def __init__(self, local_rank, rank_offset, world_size, args, use_distributed_data_parallel=True, attach_debug=False):
         self.args = args
+        self.modality_dropout_probabilities = validate_probabilities(**args.get('modality_dropout', {}))
         self.world_size = world_size
         self.world_rank = rank_offset + local_rank
         self.local_rank = local_rank
@@ -372,6 +375,9 @@ class Trainer:
 
     def train(self, epoch):
         args = self.args
+        bf, haadf = self.modality_dropout_probabilities
+        dropout_generator = (create_modality_dropout_generator(args.get('seed', 0) + self.world_rank, epoch)
+                             if bf + haadf else None)
 
         device = self.device
         batch_sampler, train_dataset_it, dataset_batch = self.batch_sampler, self.train_dataset_it, self.dataset_batch
@@ -412,6 +418,10 @@ class Trainer:
                 model = centerdir_groundtruth_op.module.insert_cached_model(model, sample)
 
             im = sample['image']
+            if bf + haadf:
+                # After dataset augmentation, before FPN normalization; keep cached samples intact.
+                im = apply_modality_dropout(im, bf, haadf, generator=dropout_generator)
+                sample = dict(sample, image=im)
 
             instances = sample['instance'].squeeze(dim=1)
             ignore = sample.get('ignore')
@@ -576,6 +586,8 @@ class Trainer:
                         'center_optim_state_dict': self.center_optimizer.state_dict() if self.center_optimizer is not None else None,
                         'logger_data': self.logger.data,
                         'sample_loss_history': self.sample_loss_history,
+                        'modality_dropout': modality_dropout_metadata(
+                            *self.modality_dropout_probabilities, seed=args.get('seed', 0) + self.world_rank),
                     }
                     self.save_checkpoint(state)
 
