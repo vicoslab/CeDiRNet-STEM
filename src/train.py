@@ -34,6 +34,9 @@ class Trainer:
     def __init__(self, local_rank, rank_offset, world_size, args, use_distributed_data_parallel=True, attach_debug=False):
         self.args = args
         self.modality_dropout_probabilities = validate_probabilities(**args.get('modality_dropout', {}))
+        gt_opts = args.get('train_dataset', {}).get('centerdir_gt_opts') or {}
+        if any(self.modality_dropout_probabilities) and gt_opts.get('use_cached_backbone_output', False):
+            raise ValueError("modality dropout cannot be used with cached backbone outputs")
         self.world_size = world_size
         self.world_rank = rank_offset + local_rank
         self.local_rank = local_rank

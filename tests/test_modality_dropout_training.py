@@ -44,6 +44,42 @@ def test_invalid_config_fails_before_writing_run_files(tmp_path, dropout):
     assert not (tmp_path / 'out').exists()
 
 
+@pytest.mark.parametrize('dropout', [
+    {'bf_drop_probability': .25}, {'haadf_drop_probability': .25},
+    {'bf_drop_probability': .25, 'haadf_drop_probability': .25},
+])
+def test_enabled_dropout_rejects_cached_outputs_before_run_files(tmp_path, dropout):
+    args = {
+        'modality_dropout': dropout,
+        'train_dataset': {'centerdir_gt_opts': {'use_cached_backbone_output': True}},
+        'save': True, 'save_dir': str(tmp_path / 'out'), 'display': False,
+    }
+    with pytest.raises(ValueError, match='modality dropout.*cached backbone outputs'):
+        Trainer(0, 0, 1, args, use_distributed_data_parallel=False)
+    assert not (tmp_path / 'out').exists()
+
+
+@pytest.mark.parametrize('dropout', [None, {},
+    {'bf_drop_probability': 0.0, 'haadf_drop_probability': 0.0},
+])
+def test_disabled_dropout_allows_cached_outputs(tmp_path, dropout):
+    args = {'train_dataset': {'centerdir_gt_opts': {'use_cached_backbone_output': True}},
+            'save': False, 'display': False}
+    if dropout is not None:
+        args['modality_dropout'] = dropout
+    trainer = Trainer(0, 0, 1, args, use_distributed_data_parallel=False)
+    assert trainer.modality_dropout_probabilities == (0.0, 0.0)
+
+
+@pytest.mark.parametrize('gt_opts', [None, {}, {'use_cached_backbone_output': False}])
+def test_enabled_dropout_allows_missing_or_disabled_cache_option(gt_opts):
+    args = {'modality_dropout': {'bf_drop_probability': .25},
+            'train_dataset': {'centerdir_gt_opts': gt_opts},
+            'save': False, 'display': False}
+    trainer = Trainer(0, 0, 1, args, use_distributed_data_parallel=False)
+    assert trainer.modality_dropout_probabilities == (.25, 0.0)
+
+
 def make_trainer(monkeypatch, tmp_path, dropout=None, rank=0):
     tmp_path.mkdir(parents=True, exist_ok=True)
     yy, xx = np.ogrid[:64, :64]

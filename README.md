@@ -115,6 +115,11 @@ to zero: old configs remain valid, and disabled dropout does not copy images or
 consume random numbers. Enabling it does not change the architecture, losses,
 labels or checkpoint tensor keys. The configuration is saved in `params.json`
 and the policy is recorded under `modality_dropout` in training checkpoints.
+Enabled dropout is incompatible with
+`train_dataset.centerdir_gt_opts.use_cached_backbone_output=True`: cached outputs
+bypass the image/backbone, so the Trainer rejects this combination before writing
+run files or initializing data/models. Cached-output training remains allowed
+when dropout is disabled.
 
 Dropout runs **after dataset augmentation and before the existing FPN
 normalization**, filling only the missing detector with raw zeros. Retained
