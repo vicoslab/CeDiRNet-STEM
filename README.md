@@ -82,6 +82,81 @@ python infer.py --input_folder /path/to/images --img_pattern "*.png" --output_fo
 #                         (will override one from model)
 ```
 
+### Optional BF/HAADF modality dropout
+
+To train a model that can also accept a missing detector, enable whole-channel
+dropout in `src/config/nanoparticles/train.py`:
+
+```python
+modality_dropout=dict(bf_drop_probability=0.25, haadf_drop_probability=0.25),
+```
+
+Or use the existing config override mechanism (with the dataset environment
+configured as for normal training):
+
+```bash
+DATASET=nanoparticles python src/train.py -c \
+  modality_dropout.bf_drop_probability=0.25 \
+  modality_dropout.haadf_drop_probability=0.25 \
+  seed=17
+```
+
+The probabilities mean **which detector is removed**, not which is retained:
+
+| Training input | Probability with the above settings |
+|---|---:|
+| Both BF and HAADF | 50% |
+| BF-only (HAADF removed) | 25% |
+| HAADF-only (BF removed) | 25% |
+
+One categorical choice is drawn per sample; both detectors are never removed.
+Probabilities must be finite, nonnegative and sum to at most one. Both default
+to zero: old configs remain valid, and disabled dropout does not copy images or
+consume random numbers. Enabling it does not change the architecture, losses,
+labels or checkpoint tensor keys. The configuration is saved in `params.json`
+and the policy is recorded under `modality_dropout` in training checkpoints.
+Enabled dropout is incompatible with
+`train_dataset.centerdir_gt_opts.use_cached_backbone_output=True`: cached outputs
+bypass the image/backbone, so the Trainer rejects this combination before writing
+run files or initializing data/models. Cached-output training remains allowed
+when dropout is disabled.
+
+Dropout runs **after dataset augmentation and before the existing FPN
+normalization**, filling only the missing detector with raw zeros. Retained
+channels are not rescaled. Inputs retain fixed slots `[BF, HAADF, auxiliary]`;
+the normal auxiliary plane is zero, but existing augmentation of that plane is
+left unchanged. Each epoch uses a private CPU generator seeded with
+`seed + world_rank + epoch` (modulo `2**63 - 1`), independently of shuffle and
+augmentation RNGs. This is epoch-level reproducibility, not exact mid-epoch resume.
+
+#### Reuse in custom training loops / SLAIF Toolbox
+
+`src/stem_modality.py` is host-independent and needs only PyTorch. Custom particle,
+semantic or joint loops can call the same helper on floating CHW/BCHW tensors:
+
+```python
+from stem_modality import apply_modality_dropout, create_modality_dropout_generator
+
+dropout = dict(bf_drop_probability=0.25, haadf_drop_probability=0.25)
+# Once per epoch; reuse this generator across all batches in that epoch.
+generator = create_modality_dropout_generator(seed=17, epoch=epoch)
+# After the final input augmentation, before the model's normalization:
+image = apply_modality_dropout(image, generator=generator, **dropout)
+```
+
+Apply it **once**, either in the native Trainer or in a custom loop, not both.
+For deterministic evaluation, `apply_input_mode(image, mode)` supports `paired`,
+`bf-only` and `haadf-only`, preserving the same detector slots. Training dropout is not applied
+at inference. This option does not make the paired dataset loader accept missing
+files, change serving APIs, or retrofit missing-modality robustness into old
+weights; singleton file/annotation handling remains the adapter's responsibility.
+
+Regression tests (install `pytest` in the model environment):
+
+```bash
+CUDA_VISIBLE_DEVICES='' OMP_NUM_THREADS=1 python -m pytest tests/ -q
+```
+
 ### Adding new dataset
 
 You may add new dataset by providing config files and dataset class:
