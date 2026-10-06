@@ -39,7 +39,7 @@ conda env create -f environment.yml
 ## Models
 
  * [MODEL](https://data.vicos.si/skokec/STEM/checkpoint.pth) trained for 1000 epochs with ConvNeXt-base on 512x512 STEM images using `src/config/nanoparticles/train.py` (SHA-256: `b77a30d6346309aeb64a7646d851db74d974758bf7d8e5f2cfcfd9f081637980`)
- * [MODALITY-DROPOUT MODEL](https://data.vicos.si/skokec/STEM/checkpoint-multimodality.pth) trained for 1000 epochs with the same ConvNeXt-base, 512x512, Adam learning rate `1e-4` and polynomial decay (exponent 2) recipe, with 50% paired, 25% BF-only and 25% HAADF-only training inputs. Supports an intentionally absent detector by filling its fixed input channel with raw zeros; do not duplicate or swap detectors. SHA-256: `6e515e20a6d4b83088b52bef507ee88b32504a0a321cbbf572f370b2d75956a1`.
+ * [MODALITY-DROPOUT MODEL](https://data.vicos.si/skokec/STEM/checkpoint-multimodality.pth) trained to stupport BF-only or HAADF-only image using the same 1000 epochs, ConvNeXt-base, 512x512, Adam learning rate `1e-4` and polynomial decay (exponent 2) recipe, (SHA-256: `6e515e20a6d4b83088b52bef507ee88b32504a0a321cbbf572f370b2d75956a1`)
  * pre-trained [LOCALIZATION](https://data.vicos.si/skokec/rtfm/CeDiRNet-3DoF/localization_checkpoint.pth) model for the second stage network trained on synthetic data only
 
 The two final checkpoints were evaluated identically on 66 historical test image
