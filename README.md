@@ -39,7 +39,25 @@ conda env create -f environment.yml
 ## Models
 
  * [MODEL](https://data.vicos.si/skokec/STEM/checkpoint.pth) trained for 1000 epochs with ConvNeXt-base on 512x512 STEM images using `src/config/nanoparticles/train.py` (SHA-256: `b77a30d6346309aeb64a7646d851db74d974758bf7d8e5f2cfcfd9f081637980`)
+ * [MODALITY-DROPOUT MODEL](https://data.vicos.si/skokec/STEM/checkpoint-multimodality.pth) trained for 1000 epochs with the same ConvNeXt-base, 512x512, Adam learning rate `1e-4` and polynomial decay (exponent 2) recipe, with 50% paired, 25% BF-only and 25% HAADF-only training inputs. Supports an intentionally absent detector by filling its fixed input channel with raw zeros; do not duplicate or swap detectors. SHA-256: `6e515e20a6d4b83088b52bef507ee88b32504a0a321cbbf572f370b2d75956a1`.
  * pre-trained [LOCALIZATION](https://data.vicos.si/skokec/rtfm/CeDiRNet-3DoF/localization_checkpoint.pth) model for the second stage network trained on synthetic data only
+
+The two final checkpoints were evaluated identically on 66 historical test image
+pairs, disjoint from the 23 training pairs by image identity, using a fixed score
+threshold of 0.5 and matching distance strictly below 20 pixels at 512x512:
+
+| Test input | Original model F1 | Modality-dropout model F1 |
+|---|---:|---:|
+| BF + HAADF | 0.9579 | 0.9567 |
+| BF-only | 0.7469 | 0.9498 |
+| HAADF-only | 0.9474 | 0.9581 |
+
+The observed paired-input penalty is **0.12 percentage points F1**, with gains of
+**20.29 points for BF-only** and **1.07 points for HAADF-only**. These are single-run
+comparisons on a reused historical holdout, not repeated-seed causal estimates.
+Missing detectors were simulated by zeroing their channels; genuine singleton
+acquisition shifts and missing-file support in loaders/serving APIs are not
+validated by these results. Training dropout is disabled at inference.
 
 ## Usage
 
